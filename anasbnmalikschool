@@ -1,0 +1,288 @@
+CREATE DATABASE school_db;
+USE school_db;
+
+-- Users table
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    fullname VARCHAR(100) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    role ENUM('admin','staff','student') NOT NULL,
+    profile_picture VARCHAR(255) DEFAULT 'default.png',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Announcements table
+CREATE TABLE announcements (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(200) NOT NULL,
+    body TEXT NOT NULL,
+    created_by INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- Sample Admin
+INSERT INTO users (fullname, email, password, role) 
+VALUES ('School Admin', 'admin@school.com', MD5('admin123'), 'admin');
+<?php
+$host = "localhost";
+$user = "root";   // change if your MySQL user is different
+$pass = "";       // change if your MySQL password is set
+$db   = "school_db";
+
+$conn = new mysqli($host, $user, $pass, $db);
+
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
+?>
+<?php
+include 'config.php';
+
+if (isset($_POST['register'])) {
+    $fullname = $_POST['fullname'];
+    $email    = $_POST['email'];
+    $password = md5($_POST['password']);
+    $role     = $_POST['role'];
+
+    $sql = "INSERT INTO users (fullname, email, password, role) 
+            VALUES ('$fullname','$email','$password','$role')";
+
+    if ($conn->query($sql) === TRUE) {
+        echo "User registered successfully.";
+    } else {
+        echo "Error: " . $conn->error;
+    }
+}
+?>
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Register</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body class="container mt-5">
+    <h2>Register User</h2>
+    <form method="POST">
+        <div class="mb-3">
+            <label>Full Name</label>
+            <input type="text" name="fullname" class="form-control" required>
+        </div>
+        <div class="mb-3">
+            <label>Email</label>
+            <input type="email" name="email" class="form-control" required>
+        </div>
+        <div class="mb-3">
+            <label>Password</label>
+            <input type="password" name="password" class="form-control" required>
+        </div>
+        <div class="mb-3">
+            <label>Role</label>
+            <select name="role" class="form-control">
+                <option value="admin">Admin</option>
+                <option value="staff">Staff</option>
+                <option value="student">Student</option>
+            </select>
+        </div>
+        <button type="submit" name="register" class="btn btn-primary">Register</button>
+    </form>
+</body>
+</html>
+<?php
+session_start();
+include 'config.php';
+
+if (isset($_POST['login'])) {
+    $email    = $_POST['email'];
+    $password = md5($_POST['password']);
+
+    $sql = "SELECT * FROM users WHERE email='$email' AND password='$password'";
+    $result = $conn->query($sql);
+
+    if ($result->num_rows == 1) {
+        $row = $result->fetch_assoc();
+        $_SESSION['id']    = $row['id'];
+        $_SESSION['role']  = $row['role'];
+        $_SESSION['name']  = $row['fullname'];
+
+        if ($row['role'] == 'admin') {
+            header("Location: dashboard_admin.php");
+        } elseif ($row['role'] == 'staff') {
+            header("Location: dashboard_staff.php");
+        } else {
+            header("Location: dashboard_student.php");
+        }
+        exit();
+    } else {
+        echo "Invalid login credentials.";
+    }
+}
+?>
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body class="container mt-5">
+    <h2>Login</h2>
+    <form method="POST">
+        <div class="mb-3">
+            <label>Email</label>
+            <input type="email" name="email" class="form-control" required>
+        </div>
+        <div class="mb-3">
+            <label>Password</label>
+            <input type="password" name="password" class="form-control" required>
+        </div>
+        <button type="submit" name="login" class="btn btn-success">Login</button>
+    </form>
+</body>
+</html>
+<?php
+session_start();
+if (!isset($_SESSION['id']) || $_SESSION['role'] != 'admin') {
+    header("Location: login.php");
+    exit();
+}
+include 'config.php';
+?>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body class="container mt-4">
+    <h2>Welcome Admin: <?php echo $_SESSION['name']; ?></h2>
+    <a href="logout.php" class="btn btn-danger">Logout</a>
+
+    <hr>
+    <h4>Manage Announcements</h4>
+    <form method="POST" action="post_announcement.php">
+        <div class="mb-3">
+            <label>Title</label>
+            <input type="text" name="title" class="form-control" required>
+        </div>
+        <div class="mb-3">
+            <label>Body</label>
+            <textarea name="body" class="form-control" required></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Post Announcement</button>
+    </form>
+
+    <hr>
+    <h4>All Announcements</h4>
+    <?php
+    $res = $conn->query("SELECT * FROM announcements ORDER BY created_at DESC");
+    while ($row = $res->fetch_assoc()) {
+        echo "<div class='card mb-2'>
+                <div class='card-body'>
+                  <h5>".$row['title']."</h5>
+                  <p>".$row['body']."</p>
+                  <small>".$row['created_at']."</small>
+                </div>
+              </div>";
+    }
+    ?>
+</body>
+</html>
+<?php
+session_start();
+if (!isset($_SESSION['id']) || $_SESSION['role'] != 'staff') {
+    header("Location: login.php");
+    exit();
+}
+include 'config.php';
+?>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Staff Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body class="container mt-4">
+    <h2>Welcome Staff: <?php echo $_SESSION['name']; ?></h2>
+    <a href="logout.php" class="btn btn-danger">Logout</a>
+
+    <hr>
+    <h4>Latest Announcements</h4>
+    <?php
+    $res = $conn->query("SELECT * FROM announcements ORDER BY created_at DESC");
+    while ($row = $res->fetch_assoc()) {
+        echo "<div class='card mb-2'>
+                <div class='card-body'>
+                  <h5>".$row['title']."</h5>
+                  <p>".$row['body']."</p>
+                  <small>".$row['created_at']."</small>
+                </div>
+              </div>";
+    }
+    ?>
+</body>
+</html>
+<?php
+session_start();
+if (!isset($_SESSION['id']) || $_SESSION['role'] != 'student') {
+    header("Location: login.php");
+    exit();
+}
+include 'config.php';
+?>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Student Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body class="container mt-4">
+    <h2>Welcome Student: <?php echo $_SESSION['name']; ?></h2>
+    <a href="logout.php" class="btn btn-danger">Logout</a>
+
+    <hr>
+    <h4>Announcements</h4>
+    <?php
+    $res = $conn->query("SELECT * FROM announcements ORDER BY created_at DESC");
+    while ($row = $res->fetch_assoc()) {
+        echo "<div class='card mb-2'>
+                <div class='card-body'>
+                  <h5>".$row['title']."</h5>
+                  <p>".$row['body']."</p>
+                  <small>".$row['created_at']."</small>
+                </div>
+              </div>";
+    }
+    ?>
+</body>
+</html>
+<?php
+session_start();
+include 'config.php';
+
+if ($_SESSION['role'] == 'admin' && isset($_POST['title'])) {
+    $title = $_POST['title'];
+    $body  = $_POST['body'];
+    $admin_id = $_SESSION['id'];
+
+    $sql = "INSERT INTO announcements (title, body, created_by) VALUES ('$title','$body','$admin_id')";
+    $conn->query($sql);
+}
+
+header("Location: dashboard_admin.php");
+exit();
+?>
+<?php
+session_start();
+session_destroy();
+header("Location: login.php");
+exit();
+?>
+git init
+git add .
+git commit -m "First commit - School system project"
+git branch -M main
+git remote add origin https://github.com/USERNAME/anasbnmalik-school-system.git
+git push -u origin main
